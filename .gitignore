@@ -1,3 +1,6 @@
+# Air hot reload
+tmp/
+
 # Binaries
 *.exe
 *.exe~

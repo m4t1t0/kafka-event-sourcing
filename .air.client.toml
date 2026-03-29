@@ -1,0 +1,16 @@
+root = "."
+tmp_dir = "tmp/client"
+
+[build]
+  cmd = "go build -o ./tmp/client/client-service ./cmd/client-service"
+  bin = "./tmp/client/client-service"
+  include_ext = ["go"]
+  include_dir = ["cmd/client-service", "internal"]
+  exclude_dir = ["tmp", "bin"]
+  delay = 1000
+
+[log]
+  time = false
+
+[misc]
+  clean_on_exit = true
