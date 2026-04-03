@@ -22,16 +22,22 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "echo > /dev/tcp/localhost/29092"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
 
   kafka-init:
     image: confluentinc/cp-kafka:7.5.0
     depends_on:
-      - kafka
+      kafka:
+        condition: service_healthy
     entrypoint: ["/bin/sh", "-c"]
     command: |
       "
       echo 'Waiting for Kafka...' &&
-      cub kafka-ready -b kafka:29092 1 30 &&
       kafka-topics --create --if-not-exists --bootstrap-server kafka:29092 --partitions 3 --replication-factor 1 --topic clients &&
       kafka-topics --create --if-not-exists --bootstrap-server kafka:29092 --partitions 3 --replication-factor 1 --topic orders &&
       echo 'Topics created.'
