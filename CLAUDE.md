@@ -44,7 +44,8 @@ The order service also consumes from the `clients` topic (group: `order-client-p
 kafka-event-sourcing/
 ├── docker-compose.yml
 ├── cmd/
-│   └── client-service/main.go       # Entrypoint: HTTP server + consumer
+│   ├── client-service/main.go       # Entrypoint: HTTP server + consumer
+│   └── order-service/main.go        # Entrypoint: HTTP server + order & client consumers
 ├── internal/
 │   ├── events/
 │   │   ├── envelope.go              # Event envelope: metadata wrapper serialized to Kafka
@@ -59,10 +60,11 @@ kafka-event-sourcing/
 │   │   ├── model.go                 # GORM read model: Client
 │   │   ├── projector.go             # Consumes client events → writes projection
 │   │   └── handler.go               # HTTP handlers (Create=command, Get/List=query)
-│   └── order/                       # (pending implementation)
+│   └── order/
 │       ├── model.go                 # GORM read model: Order, OrderItem
 │       ├── projector.go             # Consumes order events → writes projection
-│       └── handler.go               # HTTP handlers
+│       ├── client_projector.go      # Consumes client events → denormalizes client_name into orders
+│       └── handler.go               # HTTP handlers (Place/Confirm/Cancel=command, Get/List=query)
 ```
 
 ---
@@ -184,12 +186,13 @@ Topics are created by the `kafka-init` container in docker-compose. Auto-create 
 
 ### Order Service (:8082)
 
-**Pending — full implementation needed. Follow the same pattern as client-service:**
-- `POST /orders` — Publish `order.placed` event
-- `GET /orders` — List orders from projection
-- `GET /orders/{id}` — Get order by ID
-- `PUT /orders/{id}/confirm` — Publish `order.confirmed` event
-- `PUT /orders/{id}/cancel` — Publish `order.cancelled` event
+| Method | Path | Type | Description |
+|--------|------|------|-------------|
+| POST | `/orders` | Command | Publish `order.placed` event. Returns `202` with `order_id`. |
+| GET | `/orders` | Query | List all orders (with items) from projection. |
+| GET | `/orders/{id}` | Query | Get a single order by ID (with items) from projection. |
+| PUT | `/orders/{id}/confirm` | Command | Publish `order.confirmed` event. |
+| PUT | `/orders/{id}/cancel` | Command | Publish `order.cancelled` event. |
 
 ---
 
@@ -227,16 +230,17 @@ curl http://localhost:8081/clients
 - [x] Client projector (handles created/updated/deleted events)
 - [x] Client HTTP handler (Create command, Get/List queries)
 - [x] Client service main.go with graceful shutdown
+- [x] Order service (`cmd/order-service/main.go`) with graceful shutdown
+- [x] Order GORM models (`internal/order/model.go`) — Order and OrderItem tables
+- [x] Order projector (`internal/order/projector.go`) — handles placed/confirmed/cancelled events
+- [x] Order HTTP handlers (`internal/order/handler.go`) — Place/Confirm/Cancel commands, Get/List queries
+- [x] Cross-service consumption: order client projector subscribes to `clients` topic to denormalize client name into orders
+- [x] SQL migration for orders and order_items tables (`000002_create_orders`)
 
 ## What Needs to Be Built
 
-- [ ] Order service (`cmd/order-service/main.go`)
-- [ ] Order GORM models (`internal/order/model.go`) — Order and OrderItem tables
-- [ ] Order projector (`internal/order/projector.go`)
-- [ ] Order HTTP handlers (`internal/order/handler.go`)
 - [ ] Client update endpoint (`PUT /clients/{id}`)
 - [ ] Client delete endpoint (`DELETE /clients/{id}`)
-- [ ] Cross-service consumption: order projector subscribes to `clients` topic to denormalize client name into orders
 - [ ] Event replay mechanism: ability to rebuild projections from scratch by resetting consumer offsets
 - [ ] Health check endpoints (`GET /health`)
 - [ ] Integration tests using testcontainers-go
