@@ -14,6 +14,7 @@ import (
 )
 
 const Topic = "clients"
+const ConsumerGroup = "client-projector"
 
 type Projector struct {
 	db *gorm.DB
@@ -33,7 +34,7 @@ func (p *Projector) Handle(ctx context.Context, env *events.Envelope, partition 
 		}
 
 		// 2. Save offset in the same transaction → exactly-once projection
-		if err := projection.SaveOffset(tx, Topic, partition, offset); err != nil {
+		if err := projection.SaveOffset(tx, ConsumerGroup, Topic, partition, offset); err != nil {
 			return fmt.Errorf("saving offset: %w", err)
 		}
 

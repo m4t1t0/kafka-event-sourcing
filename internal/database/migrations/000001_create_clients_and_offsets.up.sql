@@ -13,9 +13,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_email ON clients (email) WHERE del
 CREATE INDEX IF NOT EXISTS idx_clients_deleted_at ON clients (deleted_at);
 
 CREATE TABLE IF NOT EXISTS offsets (
-    id        SERIAL PRIMARY KEY,
-    topic     VARCHAR(255) NOT NULL,
-    partition INTEGER NOT NULL,
-    "offset"  BIGINT NOT NULL DEFAULT 0,
-    CONSTRAINT idx_topic_partition UNIQUE (topic, partition)
+    id             SERIAL PRIMARY KEY,
+    consumer_group VARCHAR(255) NOT NULL,
+    topic          VARCHAR(255) NOT NULL,
+    partition      INTEGER NOT NULL,
+    "offset"       BIGINT NOT NULL DEFAULT 0,
+    CONSTRAINT idx_group_topic_partition UNIQUE (consumer_group, topic, partition)
 );

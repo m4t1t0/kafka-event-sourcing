@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-POSTGRES_DSN ?= postgres://eventsrc:eventsrc@localhost:5432/projections?sslmode=disable
+POSTGRES_DSN ?= postgres://postgres:postgres@localhost:5432/projections?sslmode=disable
 
 .PHONY: help build run-client run-order dev-client dev-order infra infra-down stop clean migrate-up migrate-down migrate-create
 
@@ -12,8 +12,11 @@ build: ## Build all service binaries
 	go build -o bin/client-service ./cmd/client-service
 	go build -o bin/order-service ./cmd/order-service
 
-infra: ## Start infrastructure (Kafka, Zookeeper, PostgreSQL)
-	docker-compose up -d
+up: ## Start everything (infra + services) in Docker
+	docker-compose up -d --build
+
+infra: ## Start infrastructure only (Kafka, Zookeeper, PostgreSQL)
+	docker-compose up -d zookeeper kafka kafka-init ksqldb kafka-ui postgres
 
 infra-down: ## Stop infrastructure
 	docker-compose down
@@ -37,11 +40,11 @@ stop: ## Stop infrastructure and remove volumes
 
 .PHONY: db-create
 db-create: ## Create the database, if not exists
-	docker compose exec -e PGPASSWORD=$(POSTGRES_PASSWORD) $(CONTAINER_APP_NAME) psql -U $(POSTGRES_USER) -h $(POSTGRES_HOST) -d postgres -c "CREATE DATABASE $(POSTGRES_DB);"
+	docker compose exec postgres psql -U postgres -d postgres -c "CREATE DATABASE projections;"
 
 .PHONY: db-drop
 db-drop: ## Drop the database
-	docker compose exec -e PGPASSWORD=$(POSTGRES_PASSWORD) $(CONTAINER_APP_NAME) psql -U $(POSTGRES_USER) -h $(POSTGRES_HOST) -d postgres -c "DROP DATABASE IF EXISTS $(POSTGRES_DB);"
+	docker compose exec postgres psql -U postgres -d postgres -c "DROP DATABASE IF EXISTS projections;"
 
 migrate-up: ## Run all pending migrations
 	migrate -path migrations -database "$(POSTGRES_DSN)" up

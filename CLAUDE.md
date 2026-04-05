@@ -34,7 +34,7 @@ The order service also consumes from the `clients` topic (group: `order-client-p
 - **Kafka client:** `github.com/confluentinc/confluent-kafka-go/v2/kafka`
 - **PostgreSQL ORM:** `gorm.io/gorm` + `gorm.io/driver/postgres`
 - **UUIDs:** `github.com/google/uuid`
-- **Infrastructure:** Docker Compose (Confluent Kafka 7.5, PostgreSQL 16)
+- **Infrastructure:** Docker Compose (Confluent Kafka 7.5, PostgreSQL 16, ksqlDB, Kafka UI)
 
 ---
 
@@ -43,6 +43,9 @@ The order service also consumes from the `clients` topic (group: `order-client-p
 ```
 kafka-event-sourcing/
 ├── docker-compose.yml
+├── Dockerfile                       # Multi-stage build (shared by both services via SERVICE arg)
+├── .dockerignore
+├── Makefile
 ├── cmd/
 │   ├── client-service/main.go       # Entrypoint: HTTP server + consumer
 │   └── order-service/main.go        # Entrypoint: HTTP server + order & client consumers
@@ -94,11 +97,13 @@ The projector writes the read model update AND saves the Kafka offset in a singl
 
 ```go
 db.Transaction(func(tx *gorm.DB) error {
-    applyProjection(tx, event)           // Update read model
-    projection.SaveOffset(tx, topic, partition, offset)  // Track progress
+    applyProjection(tx, event)                                    // Update read model
+    projection.SaveOffset(tx, consumerGroup, topic, partition, offset)  // Track progress
     return nil
 })
 ```
+
+The offset table includes `consumer_group` in its unique constraint, so multiple consumer groups (e.g. `client-projector` and `order-client-projector`) can independently track offsets for the same topic+partition without conflicts.
 
 Kafka auto-commit is disabled (`enable.auto.commit: false`). The consumer commits the offset to Kafka only AFTER the PostgreSQL transaction succeeds. This means:
 - If the process crashes mid-projection, the event will be reprocessed (at-least-once from Kafka's perspective).
@@ -198,14 +203,11 @@ Topics are created by the `kafka-init` container in docker-compose. Auto-create 
 
 ## Running the Project
 
-```bash
-# Start infrastructure
-docker-compose up -d
+### Everything in Docker (recommended)
 
-# Wait for Kafka to be ready (~15 seconds), then run services
-go run ./cmd/client-service
-# In another terminal:
-go run ./cmd/order-service
+```bash
+# Build and start all containers (infra + services)
+make up
 
 # Test
 curl -X POST http://localhost:8081/clients \
@@ -216,11 +218,56 @@ curl -X POST http://localhost:8081/clients \
 curl http://localhost:8081/clients
 ```
 
+### Local development (services on host, infra in Docker)
+
+```bash
+# Start only infrastructure (Kafka, Zookeeper, PostgreSQL, Kafka UI, ksqlDB)
+make infra
+
+# Run services locally (in separate terminals)
+make run-client
+make run-order
+
+# Or with hot reload via air
+make dev-client
+make dev-order
+```
+
+### Docker setup
+
+Both services share a single multi-stage `Dockerfile`. The `SERVICE` build arg selects which entrypoint to compile:
+
+```dockerfile
+ARG SERVICE
+RUN go build -tags musl -o /bin/service ./cmd/${SERVICE}
+```
+
+The `confluent-kafka-go` library requires `librdkafka` (C dependency), so the builder stage installs `gcc`, `musl-dev`, and `librdkafka-dev`, and the runtime stage includes `librdkafka`.
+
+### Makefile targets
+
+| Target | Description |
+|--------|-------------|
+| `make up` | Build and start everything in Docker |
+| `make infra` | Start only infrastructure containers |
+| `make infra-down` | Stop all containers |
+| `make stop` | Stop containers and remove volumes |
+| `make run-client` | Run client-service locally |
+| `make run-order` | Run order-service locally |
+| `make dev-client` | Run client-service with hot reload (air) |
+| `make dev-order` | Run order-service with hot reload (air) |
+| `make build` | Build both service binaries |
+| `make migrate-up` | Run pending DB migrations |
+| `make migrate-down` | Roll back last migration |
+| `make clean` | Remove build artifacts |
+
 ---
 
 ## What's Already Built
 
-- [x] Docker Compose with Kafka (Confluent), Zookeeper, PostgreSQL, topic init
+- [x] Docker Compose with Kafka (Confluent), Zookeeper, PostgreSQL, topic init, and both services containerized
+- [x] Multi-stage Dockerfile shared by both services (with librdkafka for confluent-kafka-go)
+- [x] Kafka healthcheck + `service_healthy` dependency for reliable startup ordering
 - [x] Event envelope with serialization/deserialization
 - [x] All domain event types (client + order)
 - [x] Kafka producer wrapper (keyed by aggregate ID, acks=all)
@@ -261,8 +308,10 @@ curl http://localhost:8081/clients
 
 ## Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `KAFKA_BROKER` | `localhost:9092` | Kafka bootstrap server |
-| `POSTGRES_DSN` | `host=localhost user=eventsrc password=eventsrc dbname=projections port=5432 sslmode=disable` | PostgreSQL connection string |
-| `HTTP_ADDR` | `:8081` (client) / `:8082` (order) | HTTP listen address |
+| Variable | Default (local) | Docker override | Description |
+|----------|----------------|-----------------|-------------|
+| `KAFKA_BROKER` | `localhost:9092` | `kafka:29092` | Kafka bootstrap server |
+| `POSTGRES_DSN` | `host=localhost user=eventsrc password=eventsrc dbname=projections port=5432 sslmode=disable` | `host=postgres ...` | PostgreSQL connection string |
+| `HTTP_ADDR` | `:8081` (client) / `:8082` (order) | same | HTTP listen address |
+
+When running in Docker, the services connect via container hostnames (`kafka`, `postgres`) on internal ports. When running locally, they connect via `localhost` on the ports exposed by Docker.

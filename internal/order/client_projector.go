@@ -13,6 +13,7 @@ import (
 )
 
 const ClientTopic = "clients"
+const ClientConsumerGroup = "order-client-projector"
 
 // ClientProjector consumes client events to denormalize client_name into orders.
 type ClientProjector struct {
@@ -29,7 +30,7 @@ func (p *ClientProjector) Handle(ctx context.Context, env *events.Envelope, part
 			return fmt.Errorf("applying client event %s: %w", env.EventType, err)
 		}
 
-		if err := projection.SaveOffset(tx, ClientTopic, partition, offset); err != nil {
+		if err := projection.SaveOffset(tx, ClientConsumerGroup, ClientTopic, partition, offset); err != nil {
 			return fmt.Errorf("saving offset: %w", err)
 		}
 

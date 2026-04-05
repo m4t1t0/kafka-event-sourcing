@@ -13,6 +13,7 @@ import (
 )
 
 const Topic = "orders"
+const ConsumerGroup = "order-projector"
 
 type Projector struct {
 	db *gorm.DB
@@ -30,7 +31,7 @@ func (p *Projector) Handle(ctx context.Context, env *events.Envelope, partition 
 			return fmt.Errorf("applying event %s: %w", env.EventType, err)
 		}
 
-		if err := projection.SaveOffset(tx, Topic, partition, offset); err != nil {
+		if err := projection.SaveOffset(tx, ConsumerGroup, Topic, partition, offset); err != nil {
 			return fmt.Errorf("saving offset: %w", err)
 		}
 
