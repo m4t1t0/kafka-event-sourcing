@@ -61,6 +61,42 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+type UpdateClientRequest struct {
+	Name  string `json:"name"`
+	Email string `json:"email"`
+	Phone string `json:"phone"`
+}
+
+func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	var req UpdateClientRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+
+	env, err := events.NewEnvelope(events.ClientUpdatedType, id, 0, events.ClientUpdated{
+		ClientID: id,
+		Name:     req.Name,
+		Email:    req.Email,
+		Phone:    req.Phone,
+	})
+	if err != nil {
+		http.Error(w, "failed to create event", http.StatusInternalServerError)
+		return
+	}
+
+	if err := h.producer.Publish(Topic, env); err != nil {
+		http.Error(w, "failed to publish event", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	json.NewEncoder(w).Encode(map[string]string{"status": "event_published"})
+}
+
 // --- Query side: read from projection ---
 
 func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {

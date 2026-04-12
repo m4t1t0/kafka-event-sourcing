@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 DOCKER_POSTGRES_DSN ?= postgres://postgres:postgres@localhost:5432/projections?sslmode=disable
 
-.PHONY: help build run-client run-order dev-client dev-order infra infra-down stop clean migrate-up migrate-down migrate-create
+.PHONY: help build run-client run-order infra infra-down stop clean migrate-up migrate-down migrate-create
 
 ##@ Helpers 🚀
 
@@ -20,16 +20,10 @@ infra: ## Start infrastructure only (Kafka, Zookeeper, PostgreSQL)
 infra-down: ## Stop infrastructure
 	docker compose down
 
-run-client: ## Run client-service in Docker
-	docker compose up client-service
-
-run-order: ## Run order-service in Docker
-	docker compose up order-service
-
-dev-client: ## Run client-service with hot reload in Docker
+run-client: ## Run client-service with hot reload in Docker
 	docker compose --profile dev up --build dev-client-service
 
-dev-order: ## Run order-service with hot reload in Docker
+run-order: ## Run order-service with hot reload in Docker
 	docker compose --profile dev up --build dev-order-service
 
 stop: ## Stop infrastructure and remove volumes

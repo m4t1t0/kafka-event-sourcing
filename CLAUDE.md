@@ -286,7 +286,7 @@ The `confluent-kafka-go` library requires `librdkafka` (C dependency), so the bu
 
 ## What Needs to Be Built
 
-- [ ] Client update endpoint (`PUT /clients/{id}`)
+- [x] Client update endpoint (`PUT /clients/{id}`)
 - [ ] Client delete endpoint (`DELETE /clients/{id}`)
 - [ ] Event replay mechanism: ability to rebuild projections from scratch by resetting consumer offsets
 - [ ] Health check endpoints (`GET /health`)
