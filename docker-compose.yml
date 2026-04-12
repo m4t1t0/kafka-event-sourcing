@@ -131,5 +131,60 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  # --- Dev services (hot reload) ---
+
+  dev-client-service:
+    profiles: [dev]
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    volumes:
+      - .:/app
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_started
+      kafka-init:
+        condition: service_completed_successfully
+    ports:
+      - "8081:8081"
+    environment:
+      KAFKA_BROKER: kafka:29092
+      POSTGRES_DSN: "host=postgres user=postgres password=postgres dbname=projections port=5432 sslmode=disable"
+      HTTP_ADDR: ":8081"
+    command: ["-c", ".air.client.docker.toml"]
+
+  dev-order-service:
+    profiles: [dev]
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    volumes:
+      - .:/app
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_started
+      kafka-init:
+        condition: service_completed_successfully
+    ports:
+      - "8082:8082"
+    environment:
+      KAFKA_BROKER: kafka:29092
+      POSTGRES_DSN: "host=postgres user=postgres password=postgres dbname=projections port=5432 sslmode=disable"
+      HTTP_ADDR: ":8082"
+    command: ["-c", ".air.order.docker.toml"]
+
+  # --- Tool services ---
+
+  migrate:
+    profiles: [tools]
+    image: migrate/migrate:v4.17.0
+    volumes:
+      - ./migrations:/migrations
+    network_mode: "service:postgres"
+
 volumes:
   pgdata:

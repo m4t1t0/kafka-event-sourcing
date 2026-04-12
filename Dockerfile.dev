@@ -1,0 +1,12 @@
+FROM golang:1.24-alpine
+
+RUN apk add --no-cache gcc musl-dev pkgconf librdkafka-dev
+
+RUN go install github.com/air-verse/air@latest
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+ENTRYPOINT ["air"]
